@@ -3,7 +3,242 @@
  */
 package pom.to.ivy;
 
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.maven.model.Model;
+import org.apache.maven.repository.internal.ArtifactDescriptorUtils;
+import org.apache.maven.repository.internal.DefaultArtifactDescriptorReader;
+import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
+import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.DefaultRepositorySystemSession;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.artifact.DefaultArtifact;
+import org.eclipse.aether.collection.CollectRequest;
+import org.eclipse.aether.collection.CollectResult;
+import org.eclipse.aether.collection.DependencyCollectionException;
+import org.eclipse.aether.connector.basic.BasicRepositoryConnectorFactory;
+import org.eclipse.aether.graph.Dependency;
+import org.eclipse.aether.graph.DependencyNode;
+import org.eclipse.aether.impl.ArtifactDescriptorReader;
+import org.eclipse.aether.impl.DefaultServiceLocator;
+import org.eclipse.aether.metadata.Metadata;
+import org.eclipse.aether.repository.LocalRepository;
+import org.eclipse.aether.repository.RemoteRepository;
+import org.eclipse.aether.resolution.*;
+import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
+import org.eclipse.aether.spi.connector.transport.TransporterFactory;
+import org.eclipse.aether.transport.file.FileTransporterFactory;
+import org.eclipse.aether.transport.http.HttpTransporterFactory;
+import org.eclipse.aether.util.graph.visitor.PreorderNodeListGenerator;
+
+import java.io.File;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 public class Library {
+
+    public static void main(String[] args) throws DependencyCollectionException, DependencyResolutionException, ArtifactDescriptorException, IOException {
+        RepositorySystem repoSystem = newRepositorySystem();
+
+        RepositorySystemSession session = newSession( repoSystem );
+
+        Dependency dependency =
+                new Dependency( new DefaultArtifact( "org.apache.maven:maven-profile:2.2.1" ), null );
+//                new Dependency( new DefaultArtifact( "org.apache.maven:maven-profile:pom:2.2.1" ), null );
+//                new Dependency( new DefaultArtifact( "org.apache.maven:maven-profile:2.2.1" ), "compile" );
+
+
+        RemoteRepository central = new RemoteRepository.Builder( "central", "default", "https://repo1.maven.org/maven2/" ).build();
+
+        CollectRequest collectRequest = new CollectRequest();
+        collectRequest.setRoot( dependency );
+        collectRequest.addRepository( central );
+        CollectResult collectResult = repoSystem.collectDependencies( session, collectRequest );
+        DependencyNode node = collectResult.getRoot();
+
+        Artifact rootArtifact = node.getArtifact();
+        String extension = rootArtifact.getExtension();
+        String classifier = rootArtifact.getClassifier();
+        List<DependencyNode> children = node.getChildren();
+        System.out.println(children.size());
+
+        Metadata rootArtifactMetadata = new Metadata() {
+            @Override
+            public String getGroupId() {
+                return rootArtifact.getGroupId();
+            }
+
+            @Override
+            public String getArtifactId() {
+                return rootArtifact.getArtifactId();
+            }
+
+            @Override
+            public String getVersion() {
+                return rootArtifact.getVersion();
+            }
+
+            @Override
+            public String getType() {
+                return null;
+            }
+
+            @Override
+            public Nature getNature() {
+                return null;
+            }
+
+            @Override
+            public File getFile() {
+                return null;
+            }
+
+            @Override
+            public Metadata setFile(File file) {
+                return null;
+            }
+
+            @Override
+            public String getProperty(String key, String defaultValue) {
+                return null;
+            }
+
+            @Override
+            public Map<String, String> getProperties() {
+                return null;
+            }
+
+            @Override
+            public Metadata setProperties(Map<String, String> properties) {
+                return null;
+            }
+        };
+
+//        MetadataRequest wut = new MetadataRequest(rootArtifactMetadata, central, rootArtifact.getFile().getName());
+//        List<MetadataRequest> metadataRequests = Collections.singletonList(wut);
+//        List<MetadataResult> metadataResults = repoSystem.resolveMetadata(session, metadataRequests);
+
+        DependencyRequest dependencyRequest = new DependencyRequest();
+        dependencyRequest.setRoot( node );
+
+        DependencyResult result = repoSystem.resolveDependencies( session, dependencyRequest  );
+
+        // TODO traverse result and get metadata for each file
+        //Metadata rootMetadata = new VersionsMetadata(result.getRoot().getArtifact());
+        //Model rootModel = new
+
+//        Artifact rootPom = ArtifactDescriptorUtils.toPomArtifact( rootArtifact );
+//
+//
+//        MetadataRequest wut = new MetadataRequest(rootArtifactMetadata, central, rootArtifact.getFile().getName()); // getFile() is null
+//        List<MetadataRequest> metadataRequests = Collections.singletonList(wut);
+//        List<MetadataResult> metadataResults = repoSystem.resolveMetadata(session, metadataRequests);
+
+//        ArtifactDescriptorReader reader = new DefaultArtifactDescriptorReader();
+//
+//
+//        ArtifactDescriptorRequest adr = new ArtifactDescriptorRequest(result.getRoot().getArtifact(), Collections.singletonList(central), null);
+//        ArtifactDescriptorResult adresult = repoSystem.readArtifactDescriptor(session, adr);
+
+        // TODO session.getLocalRepository() now contains all artifacts and metadata
+        // Walk the hierarchy to get *.pom
+        LocalRepository repo = session.getLocalRepository();
+        List<File> poms = Files.find(repo.getBasedir().toPath(), Integer.MAX_VALUE, (path, attr) -> attr.isRegularFile())
+        .map(Path::toFile)
+        .filter(file -> "pom".equals(FilenameUtils.getExtension(file.getName())))
+        .collect(Collectors.toList());
+
+
+        PreorderNodeListGenerator nlg = new PreorderNodeListGenerator();
+        node.accept( nlg );
+        nlg.getNodes();
+        System.out.println( nlg.getClassPath() );
+
+    }
+
+    private static RepositorySystem newRepositorySystem()
+    {
+        DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
+        locator.addService(RepositoryConnectorFactory.class, BasicRepositoryConnectorFactory.class);
+        locator.addService(ArtifactDescriptorReader.class, DefaultArtifactDescriptorReader.class);
+        locator.addService(TransporterFactory.class, FileTransporterFactory.class);
+        locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
+
+        return locator.getService( RepositorySystem.class );
+    }
+
+    private static RepositorySystemSession newSession( RepositorySystem system )
+    {
+        DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
+
+        LocalRepository localRepo = new LocalRepository( "target/local-repo" );
+        session.setLocalRepositoryManager( system.newLocalRepositoryManager( session, localRepo ) );
+
+        return session;
+    }
+
+    private Metadata fromArtifact(final Artifact artifact) {
+//        return new Maven
+        return new Metadata() {
+            @Override
+            public String getGroupId() {
+                return artifact.getGroupId();
+            }
+
+            @Override
+            public String getArtifactId() {
+                return artifact.getArtifactId();
+            }
+
+            @Override
+            public String getVersion() {
+                return artifact.getVersion();
+            }
+
+            @Override
+            public String getType() {
+                return null;
+            }
+
+            @Override
+            public Nature getNature() {
+                return null;
+            }
+
+            @Override
+            public File getFile() {
+                return null;
+            }
+
+            @Override
+            public Metadata setFile(File file) {
+                return null;
+            }
+
+            @Override
+            public String getProperty(String key, String defaultValue) {
+                return null;
+            }
+
+            @Override
+            public Map<String, String> getProperties() {
+                return null;
+            }
+
+            @Override
+            public Metadata setProperties(Map<String, String> properties) {
+                return null;
+            }
+        };
+    }
+
     public boolean someLibraryMethod() {
         return true;
     }

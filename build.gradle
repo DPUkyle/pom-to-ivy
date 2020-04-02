@@ -15,17 +15,23 @@ plugins {
 }
 
 repositories {
-    // Use jcenter for resolving dependencies.
-    // You can declare any Maven/Ivy/file repository here.
-    jcenter()
+    mavenCentral()
 }
 
-dependencies {
-    // This dependency is exported to consumers, that is to say found on their compile classpath.
-    api 'org.apache.commons:commons-math3:3.6.1'
+def aetherVersion = '1.1.0'
 
-    // This dependency is used internally, and not exposed to consumers on their own compile classpath.
-    implementation 'com.google.guava:guava:28.2-jre'
+dependencies {
+    implementation 'org.apache.maven:maven-aether-provider:3.3.9'
+    implementation "org.eclipse.aether:aether-connector-basic:$aetherVersion"
+//    implementation "org.eclipse.aether:aether-api:$aetherVersion"
+//    implementation "org.eclipse.aether:aether-impl:$aetherVersion"
+//    implementation "org.eclipse.aether:aether-transport-wagon:$aetherVersion"
+    implementation "org.eclipse.aether:aether-transport-file:$aetherVersion"
+    implementation "org.eclipse.aether:aether-transport-http:$aetherVersion"
+    //implementation 'org.apache.maven.resolver:maven-resolver:1.4.1'
+    implementation 'org.apache.maven.resolver:maven-resolver-connector-basic:1.4.1'
+    implementation 'commons-io:commons-io:2.6'
+
 
     // Use the latest Groovy version for Spock testing
     testImplementation 'org.codehaus.groovy:groovy-all:2.5.10'
